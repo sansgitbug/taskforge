@@ -62,6 +62,9 @@ class Broker:
             if operation == "SUBMIT_TASK":
                 self.handle_submit_task(client_socket, message)
 
+            elif operation == "GET_TASK":
+                self.handle_get_task(client_socket)
+
             else:
                 send_message(
                     client_socket,
@@ -119,6 +122,41 @@ class Broker:
             }
         )
 
+    def handle_get_task(
+        self,
+        client_socket: socket.socket
+    ) -> None:
+        """Give the next queued task to a worker."""
+
+        task = self.scheduler.dequeue()
+
+        if task is None:
+            send_message(
+                client_socket,
+                {
+                    "status": "ok",
+                    "task": None
+                }
+            )
+            return
+
+        task.status = "running"
+
+        send_message(
+            client_socket,
+            {
+                "status": "ok",
+                "task": {
+                    "id": task.id,
+                    "payload": task.payload,
+                    "priority": task.priority,
+                    "task_type": task.task_type,
+                    "retries": task.retries
+                }
+            }
+        )
+
+        print(f"[BROKER] Dispatched task {task.id}")
 
 if __name__ == "__main__":
     broker = Broker()
