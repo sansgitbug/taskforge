@@ -1,5 +1,6 @@
 import socket
 import time
+import threading
 
 from taskforge.common.protocol import receive_message, send_message
 from taskforge.worker.executor import execute_task
@@ -43,7 +44,13 @@ class Worker:
 
     def run(self) -> None:
         """Continuously request and execute tasks."""
+        self.register()
+        heartbeat_thread = threading.Thread(
+            target=self.send_heartbeats,
+            daemon=True
+            )
 
+        heartbeat_thread.start()
         print(f"[WORKER {self.worker_id}] Started")
 
         while True:
@@ -116,6 +123,66 @@ class Worker:
         finally:
             sock.close()
 
+    def register(self) -> None:
+        """Register this worker with the broker."""
+
+        sock = socket.socket(
+            socket.AF_INET,
+            socket.SOCK_STREAM
+        )
+
+        try:
+            sock.connect((self.host, self.port))
+
+            send_message(
+                sock,
+                {
+                    "op": "REGISTER_WORKER",
+                    "worker_id": self.worker_id
+                }
+            )
+
+            response = receive_message(sock)
+
+            if response.get("status") != "ok":
+                raise RuntimeError("Worker registration failed")
+
+        finally:
+            sock.close()
+
+
+    def send_heartbeats(self) -> None:
+        """Continuously send heartbeats to the broker."""
+
+        while True:
+            sock = socket.socket(
+                socket.AF_INET,
+                socket.SOCK_STREAM
+            )
+
+            try:
+                sock.connect((self.host, self.port))
+
+                send_message(
+                    sock,
+                    {
+                        "op": "HEARTBEAT",
+                        "worker_id": self.worker_id
+                    }
+                )
+
+                receive_message(sock)
+
+            except Exception as exc:
+                print(
+                    f"[WORKER {self.worker_id}] "
+                    f"Heartbeat failed: {exc}"
+                )
+
+            finally:
+                sock.close()
+
+            time.sleep(1)
 if __name__ == "__main__":
     worker = Worker("worker-1")
     worker.run()

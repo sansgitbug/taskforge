@@ -1,5 +1,6 @@
 import socket
 import threading
+import time
 
 from taskforge.broker.scheduler import TaskScheduler
 from taskforge.common.protocol import receive_message, send_message
@@ -17,6 +18,8 @@ class Broker:
         self.active_tasks: dict[str, Task] = {}
         self.dead_letter_queue: list[Task] = []
         self.max_retries = 3
+        self.workers: dict[str,dict] = {}
+        self.worker_timeout = 5
 
         self.server_socket = socket.socket(
             socket.AF_INET,
@@ -36,7 +39,12 @@ class Broker:
         self.server_socket.listen()
 
         print(f"[BROKER] Listening on {self.host}:{self.port}")
+        monitor_thread = threading.Thread(
+            target=self.monitor_workers,
+            daemon=True
+        )
 
+        monitor_thread.start()
         while True:
             client_socket, address = self.server_socket.accept()
 
@@ -75,7 +83,11 @@ class Broker:
 
             elif operation == "GET_RESULT":
                 self.handle_get_result(client_socket, message)
+            elif operation == "REGISTER_WORKER":
+                 self.handle_register_worker(client_socket, message)
 
+            elif operation == "HEARTBEAT":
+                self.handle_heartbeat(client_socket, message)
 
             else:
                 send_message(
@@ -265,7 +277,81 @@ class Broker:
                 "result": result
             }
         )
+    
+    def handle_register_worker(
+        self,
+        client_socket: socket.socket,
+        message: dict
+    ) -> None:
+        """Register a worker with the broker."""
 
+        worker_id = message.get("worker_id")
+
+        if not worker_id:
+            send_message(
+                client_socket,
+                {
+                    "status": "error",
+                    "message": "worker_id is required"
+                }
+            )
+            return
+
+        self.workers[worker_id] = {
+            "last_heartbeat": time.time(),
+            "current_task": None
+        }
+
+        print(f"[BROKER] Worker registered: {worker_id}")
+
+        send_message(
+            client_socket,
+            {"status": "ok"}
+        )
+
+
+    def handle_heartbeat(
+        self,
+        client_socket: socket.socket,
+        message: dict
+    ) -> None:
+        """Update a worker's last heartbeat time."""
+
+        worker_id = message.get("worker_id")
+
+        if worker_id not in self.workers:
+            send_message(
+                client_socket,
+                {
+                    "status": "error",
+                    "message": "Worker is not registered"
+                }
+            )
+            return
+
+        self.workers[worker_id]["last_heartbeat"] = time.time()
+
+        send_message(
+            client_socket,
+            {"status": "ok"}
+        )
+    def monitor_workers(self) -> None:
+        """Detect workers that have stopped sending heartbeats."""
+
+        while True:
+            time.sleep(1)
+
+            current_time = time.time()
+
+            for worker_id, worker_info in list(self.workers.items()):
+                last_heartbeat = worker_info["last_heartbeat"]
+
+                if current_time - last_heartbeat > self.worker_timeout:
+                    print(
+                        f"[BROKER] Worker {worker_id} timed out"
+                    )
+
+                    del self.workers[worker_id]
 if __name__ == "__main__":
     broker = Broker()
     broker.start()
