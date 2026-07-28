@@ -73,3 +73,12 @@ class TaskScheduler:
         """Return the number of queued tasks."""
         with self._lock:
             return len(self._queue)
+
+    def snapshot(self) -> list[Task]:
+        """Return queued tasks without removing them."""
+
+        with self._lock:
+            return [
+                item[3]
+                for item in sorted(self._queue)
+            ]

@@ -529,7 +529,53 @@ class Broker:
         client_socket: socket.socket
     ) -> None:
         """Return broker statistics and worker information."""
+        queued_tasks = []
 
+        for task in self.scheduler.snapshot():
+            queued_tasks.append({
+                "task_id": task.id,
+                "task_type": task.task_type,
+                "priority": task.priority,
+                "status": "queued",
+                "worker_id": None,
+                "retries": task.retries,
+                "created_at": task.created_at,
+                "started_at": None,
+                "completed_at": None,
+                "duration": None,
+                "payload": task.payload,
+                "result": None,
+                "error": None
+            })
+        running_tasks = []
+
+        for task in self.active_tasks.values():
+            worker_id = None
+
+            for wid, info in self.workers.items():
+                if info.get("current_task") == task.id:
+                    worker_id = wid
+                    break
+
+            running_tasks.append({
+                "task_id": task.id,
+                "task_type": task.task_type,
+                "priority": task.priority,
+                "status": "running",
+                "worker_id": worker_id,
+                "retries": task.retries,
+                "created_at": task.created_at,
+                "started_at": task.started_at,
+                "completed_at": None,
+                "duration": (
+                    time.time() - task.started_at
+                    if task.started_at
+                    else None
+                ),
+                "payload": task.payload,
+                "result": None,
+                "error": None
+            })
         workers = []
 
         for worker_id, info in self.workers.items():
@@ -553,7 +599,12 @@ class Broker:
                     "completed_tasks": self.completed_count,
                     "failed_tasks": self.failed_count,
                     "task_history": self.task_history[-50:],
-                    "events": self.events[-50:]
+                    "events": self.events[-50:],
+                    "tasks": (
+                        running_tasks
+                        + queued_tasks
+                        + list(reversed(self.task_history[-50:]))
+                    ),
                 }
             }
         )
