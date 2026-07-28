@@ -5,7 +5,7 @@ import time
 from taskforge.broker.scheduler import TaskScheduler
 from taskforge.common.protocol import receive_message, send_message
 from taskforge.common.models import Task
-from taskforge.storage.backend import ResultStore
+from taskforge.storage.backend import ResultStore, TaskStore
 
 
 class Broker:
@@ -15,6 +15,7 @@ class Broker:
 
         self.scheduler = TaskScheduler()
         self.result_store = ResultStore()
+        self.task_store = TaskStore()
         self.active_tasks: dict[str, Task] = {}
         self.dead_letter_queue: list[Task] = []
         self.max_retries = 3
@@ -37,7 +38,7 @@ class Broker:
 
         self.server_socket.bind((self.host, self.port))
         self.server_socket.listen()
-
+        self.restore_pending_tasks()
         print(f"[BROKER] Listening on {self.host}:{self.port}")
         monitor_thread = threading.Thread(
             target=self.monitor_workers,
@@ -132,7 +133,7 @@ class Broker:
         )
 
         self.scheduler.enqueue(task)
-
+        self.task_store.store(task)
         print(
             f"[BROKER] Task {task.id} queued "
             f"with priority {task.priority}"
@@ -179,6 +180,7 @@ class Broker:
 
         task.status = "running"
         self.active_tasks[task.id] = task
+        self.task_store.store(task)
         if worker_id in self.workers:
             self.workers[worker_id]["current_task"] = task.id
 
@@ -224,6 +226,7 @@ class Broker:
         if worker_id in self.workers:
             self.workers[worker_id]["current_task"] = None
         if status == "success":
+            self.task_store.delete(task_id)
             self.result_store.store(
                 task_id=task_id,
                 result=result,
@@ -256,6 +259,7 @@ class Broker:
                         status="failed",
                         error=error
                     )
+                    self.task_store.delete(task_id)
 
                     print(
                         f"[BROKER] Task {task_id} moved to DLQ"
@@ -263,6 +267,7 @@ class Broker:
 
                 else:
                     task.status = "queued"
+                    self.task_store.store(task)
                     retry_delay = 2 ** (task.retries - 1)
 
                     self.scheduler.enqueue(task, delay = retry_delay)
@@ -381,6 +386,8 @@ class Broker:
                         if task:
                             task.status = "queued"
                             self.scheduler.enqueue(task)
+                            self.task_store.store(task)
+
 
                             print(
                                 f"[BROKER] Requeued task {task_id} "
@@ -388,6 +395,37 @@ class Broker:
                             )
 
                     del self.workers[worker_id]
+
+
+    def restore_pending_tasks(self) -> None:
+        """Restore unfinished tasks from persistent storage."""
+
+        pending_tasks = self.task_store.load_pending()
+
+        for saved_task in pending_tasks:
+            task = Task(
+                payload=saved_task["payload"],
+                priority=saved_task["priority"],
+                task_type=saved_task["task_type"],
+                id=saved_task["id"],
+                retries=saved_task["retries"],
+                status="queued"
+            )
+
+            # A task that was "running" when the broker died
+            # must be treated as queued again.
+            self.task_store.store(task)
+            self.scheduler.enqueue(task)
+
+            print(f"[BROKER] Restored task {task.id}")
+
+        if pending_tasks:
+            print(
+                f"[BROKER] Restored {len(pending_tasks)} "
+                f"pending task(s)"
+            )
+
+
 if __name__ == "__main__":
     broker = Broker()
     broker.start()
