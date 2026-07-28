@@ -73,15 +73,15 @@ if __name__ == "__main__":
 
     task_id = client.submit(
         payload={
-            "func": "divide",
-            "args": [10, 0]
+            "func": "slow_task",
+            "args": [15]
         },
         priority=1
     )
 
     print(f"[CLIENT] Submitted task: {task_id}")
 
-    time.sleep(5)
+    time.sleep(25)
 
     result = client.get_result(task_id)
 

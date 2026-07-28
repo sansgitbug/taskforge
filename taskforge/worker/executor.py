@@ -1,5 +1,5 @@
 from typing import Any
-
+import time
 
 def add(a: float, b: float) -> float:
     return a + b
@@ -15,12 +15,17 @@ def multiply(a: float, b: float) -> float:
 def divide(a: float, b: float) -> float:
     return a / b
 
+def slow_task(seconds: int) -> str:
+    time.sleep(seconds)
+    return f"Slept for {seconds} seconds"
 
+    
 TASK_REGISTRY = {
     "add": add,
     "subtract": subtract,
     "multiply": multiply,
-    "divide": divide
+    "divide": divide,
+    "slow_task": slow_task
 }
 
 
@@ -39,6 +44,3 @@ def execute_task(payload: dict[str, Any]) -> Any:
     function = TASK_REGISTRY[function_name]
 
     return function(*args)
-
-def divide(a: float, b: float) -> float:
-    return a / b

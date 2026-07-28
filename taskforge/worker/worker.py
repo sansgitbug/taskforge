@@ -111,6 +111,7 @@ class Worker:
                 sock,
                 {
                     "op": "SUBMIT_RESULT",
+                    "worker_id": self.worker_id,
                     "task_id": task_id,
                     "result": result,
                     "status": status,
@@ -184,5 +185,7 @@ class Worker:
 
             time.sleep(1)
 if __name__ == "__main__":
+    import sys
+    worker_id = sys.argv[1] if len(sys.argv) > 1 else "worker-1"
     worker = Worker("worker-1")
     worker.run()

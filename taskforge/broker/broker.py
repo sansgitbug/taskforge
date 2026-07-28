@@ -76,7 +76,7 @@ class Broker:
                 self.handle_submit_task(client_socket, message)
 
             elif operation == "GET_TASK":
-                self.handle_get_task(client_socket)
+                self.handle_get_task(client_socket, message)
 
             elif operation == "SUBMIT_RESULT":
                 self.handle_submit_result(client_socket, message)
@@ -148,10 +148,11 @@ class Broker:
 
     def handle_get_task(
         self,
-        client_socket: socket.socket
+        client_socket: socket.socket,
+        message: dict
     ) -> None:
         """Give the next queued task to a worker."""
-
+        worker_id = message.get("worker_id")
         task = self.scheduler.dequeue()
 
         if task is None:
@@ -166,6 +167,9 @@ class Broker:
 
         task.status = "running"
         self.active_tasks[task.id] = task
+        if worker_id in self.workers:
+            self.workers[worker_id]["current_task"] = task.id
+
         send_message(
             client_socket,
             {
@@ -193,6 +197,7 @@ class Broker:
         result = message.get("result")
         status = message.get("status")
         error = message.get("error")
+        worker_id = message.get("worker_id")
 
         if not task_id or not status:
             send_message(
@@ -204,6 +209,8 @@ class Broker:
             )
             return
         task = self.active_tasks.pop(task_id, None)
+        if worker_id in self.workers:
+            self.workers[worker_id]["current_task"] = None
         if status == "success":
             self.result_store.store(
                 task_id=task_id,
@@ -350,6 +357,19 @@ class Broker:
                     print(
                         f"[BROKER] Worker {worker_id} timed out"
                     )
+                    task_id = worker_info.get("current_task")
+
+                    if task_id:
+                        task = self.active_tasks.pop(task_id, None)
+
+                        if task:
+                            task.status = "queued"
+                            self.scheduler.enqueue(task)
+
+                            print(
+                                f"[BROKER] Requeued task {task_id} "
+                                f"after worker failure"
+                            )
 
                     del self.workers[worker_id]
 if __name__ == "__main__":
