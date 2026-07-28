@@ -89,7 +89,8 @@ class Broker:
 
             elif operation == "HEARTBEAT":
                 self.handle_heartbeat(client_socket, message)
-
+            elif operation == "GET_STATS":
+                self.handle_get_stats(client_socket)
             else:
                 send_message(
                     client_socket,
@@ -424,7 +425,35 @@ class Broker:
                 f"[BROKER] Restored {len(pending_tasks)} "
                 f"pending task(s)"
             )
+    def handle_get_stats(
+        self,
+        client_socket: socket.socket
+    ) -> None:
+        """Return broker statistics and worker information."""
 
+        workers = []
+
+        for worker_id, info in self.workers.items():
+            workers.append({
+                "worker_id": worker_id,
+                "capabilities": info["capabilities"],
+                "current_task": info["current_task"],
+                "last_heartbeat": info["last_heartbeat"]
+            })
+
+        send_message(
+            client_socket,
+            {
+                "status": "ok",
+                "stats": {
+                    "queued_tasks": self.scheduler.size(),
+                    "active_tasks": len(self.active_tasks),
+                    "workers": workers,
+                    "worker_count": len(workers),
+                    "dlq_size": len(self.dead_letter_queue)
+                }
+            }
+        )
 
 if __name__ == "__main__":
     broker = Broker()

@@ -65,6 +65,20 @@ class Client:
 
         return response.get("result")
 
+    def get_stats(self) -> dict:
+        """Retrieve broker statistics."""
+
+        response = self.send({
+            "op": "GET_STATS"
+        })
+
+        if response.get("status") != "ok":
+            raise RuntimeError(
+                response.get("message", "Failed to retrieve broker stats")
+            )
+
+        return response["stats"]
+
 
 if __name__ == "__main__":
     import time
