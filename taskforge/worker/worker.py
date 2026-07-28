@@ -9,10 +9,12 @@ class Worker:
     def __init__(
         self,
         worker_id: str,
+        capabilities: list[str],
         host: str = "127.0.0.1",
         port: int = 5555
     ):
         self.worker_id = worker_id
+        self.capabilities = capabilities
         self.host = host
         self.port = port
 
@@ -139,7 +141,9 @@ class Worker:
                 sock,
                 {
                     "op": "REGISTER_WORKER",
-                    "worker_id": self.worker_id
+                    "worker_id": self.worker_id,
+                    "capabilities": self.capabilities
+
                 }
             )
 
@@ -187,5 +191,12 @@ class Worker:
 if __name__ == "__main__":
     import sys
     worker_id = sys.argv[1] if len(sys.argv) > 1 else "worker-1"
-    worker = Worker("worker-1")
+    capabilities = (
+        sys.argv[2].split(",")
+        if len(sys.argv) > 2
+        else ["default"]
+    )
+
+    worker = Worker(worker_id=worker_id,
+        capabilities=capabilities)
     worker.run()

@@ -24,8 +24,8 @@ class TaskScheduler:
             )
             self._counter += 1
 
-    def dequeue(self) -> Task | None:
-        """Return the next task if it is ready for execution"""
+    def dequeue(self, capabilities: list[str] | None = None) -> Task | None:
+        """Return the next available task supported by the worker"""
         with self._lock:
             if not self._queue:
                 return None
@@ -33,10 +33,41 @@ class TaskScheduler:
             available_at, _, _, task = self._queue[0]
             if available_at > time.time():
                 return None
-            
-            heapq.heappop(self._queue)
-            return task
 
+            current_time = time.time()
+
+            skipped = []
+            selected_task = None
+
+            while self._queue:
+                available_at, priority, counter, task = heapq.heappop(
+                    self._queue
+                )
+                if available_at > current_time:
+                    heapq.heappush(
+                        self._queue,
+                        (available_at, priority, counter, task)
+                    )
+                    break
+
+            # Worker cannot execute this task type.
+                if (
+                    capabilities is not None
+                    and task.task_type not in capabilities
+                ):
+                    skipped.append(
+                        (available_at, priority, counter, task)
+                    )
+                    continue
+
+                selected_task = task
+                break
+
+            # Put incompatible tasks back.
+            for item in skipped:
+                heapq.heappush(self._queue, item)
+
+            return selected_task
 
     def size(self) -> int:
         """Return the number of queued tasks."""

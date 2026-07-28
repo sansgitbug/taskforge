@@ -73,10 +73,11 @@ if __name__ == "__main__":
 
     task_id = client.submit(
         payload={
-            "func": "slow_task",
-            "args": [15]
+            "func": "add",
+            "args": [10, 20]
         },
-        priority=1
+        priority=1,
+        task_type = "compute"
     )
 
     print(f"[CLIENT] Submitted task: {task_id}")

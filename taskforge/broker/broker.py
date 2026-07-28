@@ -153,7 +153,19 @@ class Broker:
     ) -> None:
         """Give the next queued task to a worker."""
         worker_id = message.get("worker_id")
-        task = self.scheduler.dequeue()
+        worker = self.workers.get(worker_id)
+        if worker is None:
+            send_message(
+                client_socket,
+                {
+                    "status": "error",
+                    "message": "Worker is not registered"
+                }
+            )
+            return
+
+        capabilities = worker["capabilities"]
+        task = self.scheduler.dequeue(capabilities = capabilities)
 
         if task is None:
             send_message(
@@ -291,7 +303,7 @@ class Broker:
         message: dict
     ) -> None:
         """Register a worker with the broker."""
-
+        capabilities = message.get("capabilities", ["default"])
         worker_id = message.get("worker_id")
 
         if not worker_id:
@@ -306,10 +318,14 @@ class Broker:
 
         self.workers[worker_id] = {
             "last_heartbeat": time.time(),
-            "current_task": None
+            "current_task": None,
+            "capabilities": capabilities
+
         }
 
-        print(f"[BROKER] Worker registered: {worker_id}")
+        print(f"[BROKER] Worker registered: {worker_id} "
+            f"capabilities={capabilities}"
+        )
 
         send_message(
             client_socket,
