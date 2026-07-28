@@ -21,7 +21,10 @@ class Broker:
         self.max_retries = 3
         self.workers: dict[str,dict] = {}
         self.worker_timeout = 5
-
+        self.task_history: list[dict] = []
+        self.events: list[dict] = []
+        self.completed_count = 0
+        self.failed_count = 0
         self.server_socket = socket.socket(
             socket.AF_INET,
             socket.SOCK_STREAM
@@ -180,6 +183,13 @@ class Broker:
             return
 
         task.status = "running"
+        task.started_at = time.time()
+        self.add_event(
+            event_type="dispatched",
+            message=f"Task dispatched to {worker_id}",
+            task_id=task.id,
+            worker_id=worker_id
+)
         self.active_tasks[task.id] = task
         self.task_store.store(task)
         if worker_id in self.workers:
@@ -233,7 +243,43 @@ class Broker:
                 result=result,
                 status="success"
             )
+            if task is not None:
+                task.status = "success"
+                task.completed_at = time.time()
+                task.result = result
 
+                duration = (
+                    task.completed_at - task.started_at
+                    if task.started_at
+                    else None
+                )
+
+                self.task_history.append({
+                    "task_id": task.id,
+                    "task_type": task.task_type,
+                    "priority": task.priority,
+                    "status": "success",
+                    "worker_id": worker_id,
+                    "retries": task.retries,
+                    "created_at": task.created_at,
+                    "started_at": task.started_at,
+                    "completed_at": task.completed_at,
+                    "duration": duration,
+                    "payload": task.payload,
+                    "result": result,
+                    "error": None
+                })
+
+                self.task_history = self.task_history[-100:]
+
+            self.completed_count += 1
+
+            self.add_event(
+                event_type="completed",
+                message="Task completed successfully",
+                task_id=task_id,
+                worker_id=worker_id
+            )
             print(f"[BROKER] Task {task_id} succeeded")
 
         elif status == "failed":
@@ -261,6 +307,41 @@ class Broker:
                         error=error
                     )
                     self.task_store.delete(task_id)
+                    task.completed_at = time.time()
+                    task.error = error
+
+                    duration = (
+                        task.completed_at - task.started_at
+                        if task.started_at
+                        else None
+                    )
+
+                    self.task_history.append({
+                        "task_id": task.id,
+                        "task_type": task.task_type,
+                        "priority": task.priority,
+                        "status": "failed",
+                        "worker_id": worker_id,
+                        "retries": task.retries,
+                        "created_at": task.created_at,
+                        "started_at": task.started_at,
+                        "completed_at": task.completed_at,
+                        "duration": duration,
+                        "payload": task.payload,
+                        "result": None,
+                        "error": error
+                    })
+
+                    self.task_history = self.task_history[-100:]
+
+                    self.failed_count += 1
+
+                    self.add_event(
+                        event_type="failed",
+                        message=f"Task moved to DLQ: {error}",
+                        task_id=task_id,
+                        worker_id=worker_id
+                    )
 
                     print(
                         f"[BROKER] Task {task_id} moved to DLQ"
@@ -272,6 +353,12 @@ class Broker:
                     retry_delay = 2 ** (task.retries - 1)
 
                     self.scheduler.enqueue(task, delay = retry_delay)
+                    self.add_event(
+                        event_type="retry",
+                        message=f"Retry {task.retries}/{self.max_retries} scheduled in {retry_delay}s",
+                        task_id=task_id,
+                        worker_id=worker_id
+                    )
 
                     print(
                         f"[BROKER] Task {task_id} requeued"
@@ -379,6 +466,11 @@ class Broker:
                     print(
                         f"[BROKER] Worker {worker_id} timed out"
                     )
+                    self.add_event(
+                        event_type="worker_timeout",
+                        message=f"{worker_id} stopped responding",
+                        worker_id=worker_id
+                    )
                     task_id = worker_info.get("current_task")
 
                     if task_id:
@@ -388,6 +480,13 @@ class Broker:
                             task.status = "queued"
                             self.scheduler.enqueue(task)
                             self.task_store.store(task)
+
+                            self.add_event(
+                                event_type="requeued",
+                                message=f"Task recovered after {worker_id} failure",
+                                task_id=task_id,
+                                worker_id=worker_id
+                            )
 
 
                             print(
@@ -450,11 +549,33 @@ class Broker:
                     "active_tasks": len(self.active_tasks),
                     "workers": workers,
                     "worker_count": len(workers),
-                    "dlq_size": len(self.dead_letter_queue)
+                    "dlq_size": len(self.dead_letter_queue),
+                    "completed_tasks": self.completed_count,
+                    "failed_tasks": self.failed_count,
+                    "task_history": self.task_history[-50:],
+                    "events": self.events[-50:]
                 }
             }
         )
+    def add_event(
+        self,
+        event_type: str,
+        message: str,
+        task_id: str | None = None,
+        worker_id: str | None = None
+    ) -> None:
+        """Record a recent system event."""
 
+        self.events.append({
+            "timestamp": time.time(),
+            "type": event_type,
+            "message": message,
+            "task_id": task_id,
+            "worker_id": worker_id
+        })
+
+        # Don't let this grow forever.
+        self.events = self.events[-100:]
 if __name__ == "__main__":
     broker = Broker()
     broker.start()
