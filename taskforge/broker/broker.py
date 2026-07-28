@@ -4,6 +4,7 @@ import threading
 from taskforge.broker.scheduler import TaskScheduler
 from taskforge.common.protocol import receive_message, send_message
 from taskforge.common.models import Task
+from taskforge.storage.backend import ResultStore
 
 
 class Broker:
@@ -12,6 +13,7 @@ class Broker:
         self.port = port
 
         self.scheduler = TaskScheduler()
+        self.result_store = ResultStore()
 
         self.server_socket = socket.socket(
             socket.AF_INET,
@@ -64,6 +66,13 @@ class Broker:
 
             elif operation == "GET_TASK":
                 self.handle_get_task(client_socket)
+
+            elif operation == "SUBMIT_RESULT":
+                self.handle_submit_result(client_socket, message)
+
+            elif operation == "GET_RESULT":
+                self.handle_get_result(client_socket, message)
+
 
             else:
                 send_message(
@@ -157,6 +166,65 @@ class Broker:
         )
 
         print(f"[BROKER] Dispatched task {task.id}")
+
+    def handle_submit_result(
+        self,
+        client_socket: socket.socket,
+        message: dict
+    ) -> None:
+        """Store a result reported by a worker."""
+
+        task_id = message.get("task_id")
+        result = message.get("result")
+        status = message.get("status")
+        error = message.get("error")
+
+        if not task_id or not status:
+            send_message(
+                client_socket,
+                {
+                    "status": "error",
+                    "message": "task_id and status are required"
+                }
+            )
+            return
+
+        self.result_store.store(
+            task_id=task_id,
+            result=result,
+            status=status,
+            error=error
+        )
+
+        print(
+            f"[BROKER] Result stored for task {task_id}: "
+            f"{status}"
+        )
+
+        send_message(
+            client_socket,
+            {"status": "ok"}
+        )
+
+
+    def handle_get_result(
+        self,
+        client_socket: socket.socket,
+        message: dict
+    ) -> None:
+        """Return the stored result for a task."""
+
+        task_id = message.get("task_id")
+
+        result = self.result_store.get(task_id)
+
+        send_message(
+            client_socket,
+            {
+                "status": "ok",
+                "result": result
+            }
+        )
 
 if __name__ == "__main__":
     broker = Broker()

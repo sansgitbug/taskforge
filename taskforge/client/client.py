@@ -50,8 +50,25 @@ class Client:
 
         return response["task_id"]
 
+    def get_result(self, task_id: str) -> dict | None:
+        """Retrieve a task result from the broker."""
+
+        response = self.send({
+            "op": "GET_RESULT",
+            "task_id": task_id
+        })
+
+        if response.get("status") != "ok":
+            raise RuntimeError(
+                response.get("message", "Failed to retrieve result")
+            )
+
+        return response.get("result")
+
 
 if __name__ == "__main__":
+    import time
+
     client = Client()
 
     task_id = client.submit(
@@ -63,3 +80,9 @@ if __name__ == "__main__":
     )
 
     print(f"[CLIENT] Submitted task: {task_id}")
+
+    time.sleep(2)
+
+    result = client.get_result(task_id)
+
+    print(f"[CLIENT] Result: {result}")
