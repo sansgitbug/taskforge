@@ -12,11 +12,15 @@ def subtract(a: float, b: float) -> float:
 def multiply(a: float, b: float) -> float:
     return a * b
 
+def divide(a: float, b: float) -> float:
+    return a / b
+
 
 TASK_REGISTRY = {
     "add": add,
     "subtract": subtract,
     "multiply": multiply,
+    "divide": divide
 }
 
 
@@ -35,3 +39,6 @@ def execute_task(payload: dict[str, Any]) -> Any:
     function = TASK_REGISTRY[function_name]
 
     return function(*args)
+
+def divide(a: float, b: float) -> float:
+    return a / b

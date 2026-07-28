@@ -14,6 +14,9 @@ class Broker:
 
         self.scheduler = TaskScheduler()
         self.result_store = ResultStore()
+        self.active_tasks: dict[str, Task] = {}
+        self.dead_letter_queue: list[Task] = []
+        self.max_retries = 3
 
         self.server_socket = socket.socket(
             socket.AF_INET,
@@ -150,7 +153,7 @@ class Broker:
             return
 
         task.status = "running"
-
+        self.active_tasks[task.id] = task
         send_message(
             client_socket,
             {
@@ -188,18 +191,53 @@ class Broker:
                 }
             )
             return
+        task = self.active_tasks.pop(task_id, None)
+        if status == "success":
+            self.result_store.store(
+                task_id=task_id,
+                result=result,
+                status="success"
+            )
 
-        self.result_store.store(
-            task_id=task_id,
-            result=result,
-            status=status,
-            error=error
-        )
+            print(f"[BROKER] Task {task_id} succeeded")
 
-        print(
-            f"[BROKER] Result stored for task {task_id}: "
-            f"{status}"
-        )
+        elif status == "failed":
+
+            if task is None:
+                print(f"[BROKER] Unknown failed task {task_id}")
+
+            else:
+                task.retries += 1
+
+                print(
+                    f"[BROKER] Task {task_id} failed "
+                    f"(attempt {task.retries}/{self.max_retries})"
+                )
+
+                if task.retries >= self.max_retries:
+                    task.status = "failed"
+
+                    self.dead_letter_queue.append(task)
+
+                    self.result_store.store(
+                        task_id=task_id,
+                        result=None,
+                        status="failed",
+                        error=error
+                    )
+
+                    print(
+                        f"[BROKER] Task {task_id} moved to DLQ"
+                    )
+
+                else:
+                    task.status = "queued"
+
+                    self.scheduler.enqueue(task)
+
+                    print(
+                        f"[BROKER] Task {task_id} requeued"
+                    )
 
         send_message(
             client_socket,
