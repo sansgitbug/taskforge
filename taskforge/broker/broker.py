@@ -232,11 +232,13 @@ class Broker:
 
                 else:
                     task.status = "queued"
+                    retry_delay = 2 ** (task.retries - 1)
 
-                    self.scheduler.enqueue(task)
+                    self.scheduler.enqueue(task, delay = retry_delay)
 
                     print(
                         f"[BROKER] Task {task_id} requeued"
+                        f"with {retry_delay}s backoff"
                     )
 
         send_message(

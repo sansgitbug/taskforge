@@ -3,6 +3,7 @@
 
 import heapq
 import threading
+import time
 
 from taskforge.common.models import Task
 
@@ -12,23 +13,30 @@ class TaskScheduler:
         self._counter = 0
         self._lock = threading.Lock()
 
-    def enqueue(self, task: Task) -> None:
-        """Add a task to the priority queue."""
+    def enqueue(self, task: Task, delay: float = 0) -> None:
+        """Add a task to the queue, optionally delaying its availability"""
+        available_at = time.time() + delay
+
         with self._lock:
             heapq.heappush(
                 self._queue,
-                (task.priority, self._counter, task)
+                (available_at, task.priority, self._counter, task)
             )
             self._counter += 1
 
     def dequeue(self) -> Task | None:
-        """Remove and return the highest-priority task."""
+        """Return the next task if it is ready for execution"""
         with self._lock:
             if not self._queue:
                 return None
 
-            _, _, task = heapq.heappop(self._queue)
+            available_at, _, _, task = self._queue[0]
+            if available_at > time.time():
+                return None
+            
+            heapq.heappop(self._queue)
             return task
+
 
     def size(self) -> int:
         """Return the number of queued tasks."""
