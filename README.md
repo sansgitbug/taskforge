@@ -80,6 +80,7 @@ broker stores result
                   | priority queue |
                   | worker registry|
                   | task routing   |
+                  | dead letter Q  |
                   +---+--------+---+
                       |        |
                   TCP |        | TCP
@@ -150,6 +151,8 @@ error
 ```
 
 This makes the execution lifecycle visible instead of treating a task as only an input and output.
+
+Tasks that fail and exhaust their retry limit are moved to a dead letter queue. The broker tracks these separately so they can be inspected without being silently discarded. This prevents a consistently failing task from being retried indefinitely and blocking queue throughput.
 
 ## Persistence and recovery
 
@@ -317,6 +320,8 @@ taskforge/
 ## Performance
 
 The persistence layer was optimized by replacing per-operation SQLite connections with persistent connections configured in WAL mode.
+
+The initial implementation opened a new SQLite connection for every read and write operation. Under load, each persistence call took 200–450ms, which became the dominant cost even for trivial tasks. Replacing per-operation connections with a single persistent connection per store, configured in WAL mode, reduced per-operation cost to under 5ms and improved throughput from 3.8 tasks/sec to 115 tasks/sec.
 
 Benchmark results:
 
