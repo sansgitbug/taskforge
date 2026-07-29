@@ -1,5 +1,7 @@
 # TaskForge
 
+![TaskForge Dashboard](docs/dashboard.png)
+
 TaskForge is a distributed task queue built in Python. It has a central broker that accepts tasks, schedules them to compatible workers, tracks worker health, and stores task results.
 
 I built it to understand what happens underneath task queue systems instead of starting with an existing framework such as Celery. The communication between the broker, workers, and Python client uses a custom TCP protocol built with Python sockets.
@@ -27,10 +29,12 @@ Workers register themselves with a list of capabilities. For example:
 
 ```text
 worker-1 -> compute
-worker-2 -> io
+worker-2 -> notification
+worker-3 -> file
+worker-4 -> ML
 ```
 
-A `compute` task can therefore be assigned to `worker-1`, while an `io` task waits for a worker with the corresponding capability.
+A task is only dispatched to a worker whose advertised capabilities match the task's task_type. For example, compute tasks are routed to compute workers, while notification, file, and ml tasks are dispatched to their respective worker pools.
 
 Once a worker receives a task, it executes the payload and sends the result back to the broker. The broker records the result and makes it available to clients and the dashboard.
 
@@ -103,11 +107,24 @@ Scheduling also takes worker capabilities into account. A worker only receives t
 
 This means adding more workers does not require changing the client. Workers advertise what they can handle when they register with the broker.
 
+## Supported task types
+
+TaskForge currently supports multiple categories of workloads.
+
+| Task type | Example functions |
+|-----------|-------------------|
+| Compute | add, subtract, multiply, divide |
+| Notification | send_email |
+| File | count_words |
+| ML | generate_embedding |
+
+Additional task types can be introduced by registering new worker capabilities and task handlers.
+
 ## Worker health
 
 Workers send heartbeats to the broker while they are running.
 
-The broker records the last heartbeat received from every worker. Workers that stop sending heartbeats can be detected and removed from the active worker pool.
+The broker records the last heartbeat received from every worker. Workers that stop sending heartbeats are marked as stale by the broker and displayed as unhealthy in the dashboard. This allows inactive workers to be identified without inspecting broker logs.
 
 The dashboard exposes this information so worker state can be inspected without looking through broker logs.
 
@@ -294,3 +311,18 @@ taskforge/
 **Backend:** Python, TCP sockets, threading, SQLite, FastAPI
 
 **Frontend:** React, Vite, JavaScript, CSS
+
+**Concepts:** Distributed task scheduling, capability-aware routing, heartbeat monitoring, retry with exponential backoff, dead-letter queues
+
+## Performance
+
+The persistence layer was optimized by replacing per-operation SQLite connections with persistent connections configured in WAL mode.
+
+Benchmark results:
+
+| Workload | Throughput |
+|----------|-----------:|
+| 100 tasks | ~115 tasks/sec |
+| 1000 tasks | ~95 tasks/sec |
+
+The benchmark measures end-to-end latency from task submission until completion across multiple workers.
