@@ -52,7 +52,7 @@ class Broker:
         while True:
             client_socket, address = self.server_socket.accept()
 
-            print(f"[BROKER] Connection from {address}")
+            #print(f"[BROKER] Connection from {address}")
 
             thread = threading.Thread(
                 target=self.handle_connection,
@@ -72,7 +72,7 @@ class Broker:
         try:
             message = receive_message(client_socket)
 
-            print(f"[BROKER] Received from {address}: {message}")
+            #print(f"[BROKER] Received from {address}: {message}")
 
             operation = message.get("op")
 
@@ -138,10 +138,10 @@ class Broker:
 
         self.scheduler.enqueue(task)
         self.task_store.store(task)
-        print(
-            f"[BROKER] Task {task.id} queued "
-            f"with priority {task.priority}"
-        )
+        #print(
+            #f"[BROKER] Task {task.id} queued "
+            #f"with priority {task.priority}"
+        #)
 
         send_message(
             client_socket,
@@ -598,12 +598,12 @@ class Broker:
                     "dlq_size": len(self.dead_letter_queue),
                     "completed_tasks": self.completed_count,
                     "failed_tasks": self.failed_count,
-                    "task_history": self.task_history[-50:],
+                    "task_history": self.task_history,
                     "events": self.events[-50:],
                     "tasks": (
                         running_tasks
                         + queued_tasks
-                        + list(reversed(self.task_history[-50:]))
+                        + list(reversed(self.task_history))
                     ),
                 }
             }

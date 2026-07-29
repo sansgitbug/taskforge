@@ -32,3 +32,8 @@ build/
 .idea/
 .DS_Store
 Thumbs.db
+
+# SQLite
+taskforge.db
+taskforge.db-shm
+taskforge.db-wal

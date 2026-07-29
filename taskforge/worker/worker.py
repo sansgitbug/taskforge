@@ -59,7 +59,7 @@ class Worker:
             task = self.request_task()
 
             if task is None:
-                time.sleep(1)
+                time.sleep(0.1)
                 continue
 
             print(
