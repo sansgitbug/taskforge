@@ -1,6 +1,8 @@
 from typing import Any
 import time
 
+
+# Compute Tasks
 def add(a: float, b: float) -> float:
     return a + b
 
@@ -12,20 +14,54 @@ def subtract(a: float, b: float) -> float:
 def multiply(a: float, b: float) -> float:
     return a * b
 
+
 def divide(a: float, b: float) -> float:
     return a / b
 
-def slow_task(seconds: int) -> str:
-    time.sleep(seconds)
-    return f"Slept for {seconds} seconds"
 
-    
+# Notification / IO Tasks
+def send_email(recipient: str) -> dict:
+    """Simulate sending an email."""
+    time.sleep(0.5)
+
+    return {
+        "recipient": recipient,
+        "status": "sent"
+    }
+
+
+# File Processing Tasks
+def count_words(text: str) -> int:
+    """Count the number of words in a document."""
+    return len(text.split())
+
+
+# ML Tasks
+def generate_embedding(text: str) -> dict:
+    """Simulate embedding generation."""
+    time.sleep(0.3)
+
+    return {
+        "dimension": 384,
+        "status": "generated"
+    }
+
+
 TASK_REGISTRY = {
+    # Compute
     "add": add,
     "subtract": subtract,
     "multiply": multiply,
     "divide": divide,
-    "slow_task": slow_task
+
+    # Notification / IO
+    "send_email": send_email,
+
+    # File
+    "count_words": count_words,
+
+    # ML
+    "generate_embedding": generate_embedding,
 }
 
 

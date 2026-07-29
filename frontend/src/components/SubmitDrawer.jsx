@@ -1,14 +1,32 @@
 import { useEffect, useState } from 'react'
 import { submitTask } from '../api'
 
-const DEFAULT_PAYLOAD = `{
-  "func": "add",
-  "args": [10, 20]
+const DEFAULT_PAYLOADS = {
+    compute: `{
+    "func": "add",
+    "args": [10, 20]
+}`,
+
+    notification: `{
+    "func": "send_email",
+    "args": ["alice@example.com"]
+}`,
+
+    file: `{
+    "func": "count_words",
+    "args": ["TaskForge is a distributed scheduler"]
+}`,
+
+    ml: `{
+    "func": "generate_embedding",
+    "args": ["TaskForge uses capability-aware scheduling"]
 }`
+}
+    
 
 export default function SubmitDrawer({ capabilities, onSubmitted }) {
   const [open, setOpen] = useState(false)
-  const [payload, setPayload] = useState(DEFAULT_PAYLOAD)
+  const [payload, setPayload] = useState(DEFAULT_PAYLOADS[capabilities[0]] ?? DEFAULT_PAYLOADS.compute)
   const [priority, setPriority] = useState(5)
   const [taskType, setTaskType] = useState(
     capabilities[0] ?? 'default'
@@ -18,12 +36,7 @@ export default function SubmitDrawer({ capabilities, onSubmitted }) {
 
   // Capabilities arrive asynchronously from the API.
   // Keep the selected task type in sync once they are available.
-  useEffect(() => {
-    if (capabilities.length > 0) {
-      setTaskType(capabilities[0])
-    }
-  }, [capabilities])
-
+  
   async function handleSubmit(event) {
     event.preventDefault()
     setError('')
@@ -96,7 +109,11 @@ export default function SubmitDrawer({ capabilities, onSubmitted }) {
 
             <select
               value={taskType}
-              onChange={(e) => setTaskType(e.target.value)}
+              onChange={(e) => {
+                const type = e.target.value 
+                setTaskType(type) 
+                setPayload(DEFAULT_PAYLOADS[type])
+              }}
             >
               {(capabilities.length
                 ? capabilities

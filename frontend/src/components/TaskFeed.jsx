@@ -30,6 +30,9 @@ export default function TaskFeed({ tasks = [] }) {
         <div>
           <span className="eyebrow">EXECUTION</span>
           <h2>Tasks</h2>
+           <p className="panel-hint">
+            Click a task to view payload and result.
+            </p>  
         </div>
 
         <span className="record-count">{tasks.length} records</span>
