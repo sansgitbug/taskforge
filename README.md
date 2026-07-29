@@ -1,6 +1,6 @@
 # TaskForge
 
-![TaskForge Dashboard](docs/dashboard.png)
+![TaskForge Dashboard](dashboard/dashboard.png)
 
 TaskForge is a distributed task queue built in Python. It has a central broker that accepts tasks, schedules them to compatible workers, tracks worker health, and stores task results.
 
